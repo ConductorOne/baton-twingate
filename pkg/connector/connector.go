@@ -2,39 +2,94 @@ package connector
 
 import (
 	"context"
-	"fmt"
+	"io"
 
+	"github.com/ConductorOne/baton-twingate/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 )
 
-// TODO: implement your connector here
-type connectorImpl struct {
+var (
+	resourceTypeRole = &v2.ResourceType{
+		Id:          "role",
+		DisplayName: "Role",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
+		Annotations: v1AnnotationsForResourceType("role"),
+	}
+	resourceTypeGroup = &v2.ResourceType{
+		Id:          "group",
+		DisplayName: "Group",
+		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
+		Annotations: v1AnnotationsForResourceType("group"),
+	}
+	resourceTypeUser = &v2.ResourceType{
+		Id:          "user",
+		DisplayName: "User",
+		Traits: []v2.ResourceType_Trait{
+			v2.ResourceType_TRAIT_USER,
+		},
+		Annotations: v1AnnotationsForResourceType("user"),
+	}
+)
+
+type Config struct {
+	Domain string
+	ApiKey string
+}
+type Twingate struct {
+	client *client.ConnectorClient
+	domain string
+	apiKey string
 }
 
-func (c *connectorImpl) ListResourceTypes(ctx context.Context, req *v2.ResourceTypesServiceListResourceTypesRequest) (*v2.ResourceTypesServiceListResourceTypesResponse, error) {
-	return nil, fmt.Errorf("not implemented")
+func New(ctx context.Context, config Config) (*Twingate, error) {
+	client, err := client.New(ctx, config.ApiKey, config.Domain)
+	if err != nil {
+		return nil, err
+	}
+	rv := &Twingate{
+		domain: config.Domain,
+		apiKey: config.ApiKey,
+		client: client,
+	}
+	return rv, nil
 }
 
-func (c *connectorImpl) ListResources(ctx context.Context, req *v2.ResourcesServiceListResourcesRequest) (*v2.ResourcesServiceListResourcesResponse, error) {
-	return nil, fmt.Errorf("not implemented")
+func (c *Twingate) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
+	_, err := c.Validate(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var annos annotations.Annotations
+	annos.Update(&v2.ExternalLink{
+		Url: c.domain,
+	})
+
+	return &v2.ConnectorMetadata{
+		DisplayName: "Twingate",
+		Annotations: annos,
+	}, nil
 }
 
-func (c *connectorImpl) ListEntitlements(ctx context.Context, req *v2.EntitlementsServiceListEntitlementsRequest) (*v2.EntitlementsServiceListEntitlementsResponse, error) {
-	return nil, fmt.Errorf("not implemented")
+func (c *Twingate) Validate(ctx context.Context) (annotations.Annotations, error) {
+	_, err := c.client.ListUsers(ctx, "", 1)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
-func (c *connectorImpl) ListGrants(ctx context.Context, req *v2.GrantsServiceListGrantsRequest) (*v2.GrantsServiceListGrantsResponse, error) {
-	return nil, fmt.Errorf("not implemented")
+func (c *Twingate) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.ReadCloser, error) {
+	return "", nil, nil
 }
 
-func (c *connectorImpl) GetMetadata(ctx context.Context, req *v2.ConnectorServiceGetMetadataRequest) (*v2.ConnectorServiceGetMetadataResponse, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (c *connectorImpl) Validate(ctx context.Context, req *v2.ConnectorServiceValidateRequest) (*v2.ConnectorServiceValidateResponse, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (c *connectorImpl) GetAsset(req *v2.AssetServiceGetAssetRequest, server v2.AssetService_GetAssetServer) error {
-	return fmt.Errorf("not implemented")
+func (c *Twingate) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
+	return []connectorbuilder.ResourceSyncer{
+		groupBuilder(c.client, c.domain),
+		roleBuilder(c.client, c.domain),
+		userBuilder(c.client, c.domain),
+	}
 }
