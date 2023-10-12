@@ -15,13 +15,11 @@ var (
 		Id:          "role",
 		DisplayName: "Role",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_ROLE},
-		Annotations: v1AnnotationsForResourceType("role"),
 	}
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
 		DisplayName: "Group",
 		Traits:      []v2.ResourceType_Trait{v2.ResourceType_TRAIT_GROUP},
-		Annotations: v1AnnotationsForResourceType("group"),
 	}
 	resourceTypeUser = &v2.ResourceType{
 		Id:          "user",
@@ -29,7 +27,7 @@ var (
 		Traits: []v2.ResourceType_Trait{
 			v2.ResourceType_TRAIT_USER,
 		},
-		Annotations: v1AnnotationsForResourceType("user"),
+		Annotations: annotationsForUserResourceType(),
 	}
 )
 
@@ -57,11 +55,6 @@ func New(ctx context.Context, config Config) (*Twingate, error) {
 }
 
 func (c *Twingate) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
-	_, err := c.Validate(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	var annos annotations.Annotations
 	annos.Update(&v2.ExternalLink{
 		Url: c.domain,
@@ -69,6 +62,7 @@ func (c *Twingate) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) 
 
 	return &v2.ConnectorMetadata{
 		DisplayName: "Twingate",
+		Description: "Connector syncing Twingate users, groups, and roles to Baton",
 		Annotations: annos,
 	}, nil
 }
