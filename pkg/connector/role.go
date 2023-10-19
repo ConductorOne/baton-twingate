@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ConductorOne/baton-twingate/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	grant "github.com/conductorone/baton-sdk/pkg/types/grant"
 	res "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-twingate/pkg/connector/client"
 )
 
 const (
@@ -27,6 +27,29 @@ func (o *roleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
+func roleResource(ctx context.Context, role *client.Role) (*v2.Resource, error) {
+	profile := map[string]interface{}{
+		"role_id":   role.Id,
+		"role_name": role.Name,
+	}
+
+	roleTraitOptions := []res.RoleTraitOption{
+		res.WithRoleProfile(profile),
+	}
+
+	resource, err := res.NewRoleResource(
+		role.Name,
+		resourceTypeRole,
+		role.Id,
+		roleTraitOptions,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return resource, nil
+}
+
 func (o *roleResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	roles, err := o.client.ListRoles(ctx)
 	if err != nil {
@@ -35,30 +58,30 @@ func (o *roleResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagin
 
 	rv := make([]*v2.Resource, 0, len(roles))
 	for _, r := range roles {
-		annos := &v2.V1Identifier{
-			Id: r.Id,
-		}
-		profile := roleProfile(ctx, r)
-		roleTrait := []res.RoleTraitOption{res.WithRoleProfile(profile)}
-		roleResource, err := res.NewRoleResource(r.Name, resourceTypeRole, r.Id, roleTrait, res.WithAnnotation(annos))
+		roleCopy := r
+
+		rr, err := roleResource(ctx, roleCopy)
 		if err != nil {
 			return nil, "", nil, err
 		}
-		rv = append(rv, roleResource)
+
+		rv = append(rv, rr)
 	}
 	return rv, "", nil, nil
 }
 
 func (o *roleResourceType) Entitlements(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
-	var annos annotations.Annotations
-	annos.Update(&v2.V1Identifier{
-		Id: V1MembershipEntitlementID(resource.Id.Resource),
-	})
-	member := ent.NewAssignmentEntitlement(resource, roleMemberEntitlement, ent.WithGrantableTo(resourceTypeUser))
-	member.Description = fmt.Sprintf("Has the %s role in Twingate", resource.DisplayName)
-	member.Annotations = annos
-	member.DisplayName = fmt.Sprintf("%s Role Member", resource.DisplayName)
-	return []*v2.Entitlement{member}, "", nil, nil
+	var rv []*v2.Entitlement
+
+	assignmentOptions := []ent.EntitlementOption{
+		ent.WithGrantableTo(resourceTypeUser),
+		ent.WithDisplayName(fmt.Sprintf("%s Role Member", resource.DisplayName)),
+		ent.WithDescription(fmt.Sprintf("Has the %s role in Twingate", resource.DisplayName)),
+	}
+
+	rv = append(rv, ent.NewAssignmentEntitlement(resource, roleMemberEntitlement, assignmentOptions...))
+
+	return rv, "", nil, nil
 }
 
 func (o *roleResourceType) Grants(ctx context.Context, resource *v2.Resource, pt *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
@@ -75,21 +98,21 @@ func (o *roleResourceType) Grants(ctx context.Context, resource *v2.Resource, pt
 		})
 	}
 
-	resp, err := o.client.ListRoleGrants(ctx, resource.Id.Resource, bag.PageToken(), 100)
+	resp, err := o.client.ListRoleGrants(ctx, resource.Id.Resource, bag.PageToken(), ResourcesPageSize)
 	if err != nil {
 		return nil, "", nil, err
 	}
+
 	var rv []*v2.Grant
 	for _, roleGrant := range resp.Grants {
-		v1Identifier := &v2.V1Identifier{
-			Id: V1GrantID(resourceTypeRole.Id, roleGrant.RoleID, roleGrant.PrincipalID),
-		}
-		rID, err := res.NewResourceID(resourceTypeUser, roleGrant.PrincipalID)
-		if err != nil {
-			return nil, "", nil, err
-		}
-		grant := grant.NewGrant(resource, roleMemberEntitlement, rID, grant.WithAnnotation(v1Identifier))
-		rv = append(rv, grant)
+		rv = append(rv, grant.NewGrant(
+			resource,
+			roleMemberEntitlement,
+			&v2.ResourceId{
+				ResourceType: resourceTypeUser.Id,
+				Resource:     roleGrant.PrincipalID,
+			},
+		))
 	}
 
 	nextPage, err := bag.NextToken(resp.Pagination)
@@ -109,11 +132,4 @@ func roleBuilder(client *client.ConnectorClient, domain string) *roleResourceTyp
 		client:       client,
 		domain:       domain,
 	}
-}
-
-func roleProfile(ctx context.Context, role *client.Role) map[string]interface{} {
-	profile := make(map[string]interface{})
-	profile["role_id"] = role.Id
-	profile["role_name"] = role.Name
-	return profile
 }

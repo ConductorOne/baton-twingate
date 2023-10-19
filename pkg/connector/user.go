@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ConductorOne/baton-twingate/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	resource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-twingate/pkg/connector/client"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -21,6 +21,34 @@ type userResourceType struct {
 
 func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
+}
+
+func userResource(ctx context.Context, user *client.User) (*v2.Resource, error) {
+	profile := map[string]interface{}{
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+		"is_admin":   user.IsAdmin,
+		"email":      user.Email,
+		"id":         user.ID,
+	}
+
+	userTraitOptions := []resource.UserTraitOption{
+		resource.WithUserProfile(profile),
+		resource.WithEmail(user.Email, true),
+		resource.WithStatus(v2.UserTrait_Status_STATUS_ENABLED),
+	}
+
+	resource, err := resource.NewUserResource(
+		fmt.Sprintf("%s %s", user.FirstName, user.LastName),
+		resourceTypeUser,
+		user.ID,
+		userTraitOptions,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return resource, nil
 }
 
 func (o *userResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
@@ -37,26 +65,25 @@ func (o *userResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagin
 		})
 	}
 
-	resp, err := o.client.ListUsers(ctx, bag.PageToken(), 100)
+	resp, err := o.client.ListUsers(ctx, bag.PageToken(), ResourcesPageSize)
 	if err != nil {
 		return nil, "", nil, err
 	}
+
 	rv := make([]*v2.Resource, 0, len(resp.Users))
 	for _, user := range resp.Users {
 		if user.ID == "" {
 			l.Error("twingate: user had no id", zap.String("email", user.Email))
 			continue
 		}
-		annos := &v2.V1Identifier{
-			Id: user.ID,
-		}
-		profile := userProfile(ctx, *user)
-		userTrait := []resource.UserTraitOption{resource.WithUserProfile(profile), resource.WithEmail(user.Email, true), resource.WithStatus(v2.UserTrait_Status_STATUS_ENABLED)}
-		userResource, err := resource.NewUserResource(fmt.Sprintf("%s %s", user.FirstName, user.LastName), resourceTypeUser, user.ID, userTrait, resource.WithAnnotation(annos))
+
+		userCopy := user
+		ur, err := userResource(ctx, userCopy)
 		if err != nil {
 			return nil, "", nil, err
 		}
-		rv = append(rv, userResource)
+
+		rv = append(rv, ur)
 	}
 
 	nextPage, err := bag.NextToken(resp.Pagination)
@@ -86,14 +113,4 @@ func userBuilder(client *client.ConnectorClient, domain string) *userResourceTyp
 		domain:       domain,
 		client:       client,
 	}
-}
-
-func userProfile(ctx context.Context, user client.User) map[string]interface{} {
-	profile := make(map[string]interface{})
-	profile["first_name"] = user.FirstName
-	profile["last_name"] = user.LastName
-	profile["is_admin"] = user.IsAdmin
-	profile["email"] = user.Email
-	profile["id"] = user.ID
-	return profile
 }

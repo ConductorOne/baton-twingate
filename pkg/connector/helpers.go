@@ -1,22 +1,15 @@
 package connector
 
 import (
-	"fmt"
-
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
-const (
-	MembershipEntitlementIDTemplate = "membership:%s"
-	GrantIDTemplate                 = "grant:%s:%s:%s"
-)
+const ResourcesPageSize = 100
 
-func v1AnnotationsForResourceType(resourceTypeID string) annotations.Annotations {
+func annotationsForUserResourceType() annotations.Annotations {
 	annos := annotations.Annotations{}
-	annos.Update(&v2.V1Identifier{
-		Id: resourceTypeID,
-	})
+	annos.Update(&v2.SkipEntitlementsAndGrants{})
 	return annos
 }
 
@@ -27,12 +20,4 @@ func Convert[T any, R any](slice []T, f func(in T) R) []R {
 		ret = append(ret, f(t))
 	}
 	return ret
-}
-
-func V1GrantID(resourceType string, entitlementID string, userID string) string {
-	return fmt.Sprintf(GrantIDTemplate, resourceType, entitlementID, userID)
-}
-
-func V1MembershipEntitlementID(resourceID string) string {
-	return fmt.Sprintf(MembershipEntitlementIDTemplate, resourceID)
 }
