@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"github.com/conductorone/baton-sdk/pkg/field"
@@ -19,9 +19,20 @@ var (
 		field.WithIsSecret(true),
 	)
 
-	configurationFields = []field.SchemaField{
+	ConfigurationFields = []field.SchemaField{
 		DomainField,
 		ApiKeyField,
 	}
-	Configuration = field.NewConfiguration(configurationFields)
+
+	Configuration      = field.NewConfiguration(ConfigurationFields)
+	FieldRelationships = []field.SchemaFieldRelationship{}
+)
+
+//go:generate go run ./gen
+var Config = field.NewConfiguration(
+	ConfigurationFields,
+	field.WithConstraints(FieldRelationships...),
+	field.WithConnectorDisplayName("Twingate V2"),
+	field.WithHelpUrl("/docs/baton/twingate-v2"),
+	field.WithIconUrl("/static/app-icons/twingate.svg"),
 )
