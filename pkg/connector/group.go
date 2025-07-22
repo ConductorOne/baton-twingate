@@ -27,7 +27,7 @@ func (o *groupResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func groupResource(ctx context.Context, group client.Group) (*v2.Resource, error) {
+func groupResource(group client.Group) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"group_id":   group.ID,
 		"group_name": group.Name,
@@ -50,7 +50,7 @@ func groupResource(ctx context.Context, group client.Group) (*v2.Resource, error
 	return resource, nil
 }
 
-func (o *groupResourceType) List(ctx context.Context, resourceId *v2.ResourceId, pt *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (o *groupResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	bag := &pagination.Bag{}
 	err := bag.Unmarshal(pt.Token)
 	if err != nil {
@@ -68,8 +68,7 @@ func (o *groupResourceType) List(ctx context.Context, resourceId *v2.ResourceId,
 
 	rv := make([]*v2.Resource, 0, len(resp.Groups))
 	for _, g := range resp.Groups {
-		groupCopy := g
-		gr, err := groupResource(ctx, groupCopy)
+		gr, err := groupResource(g)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -87,7 +86,7 @@ func (o *groupResourceType) List(ctx context.Context, resourceId *v2.ResourceId,
 	return rv, nextPage, annotations, nil
 }
 
-func (o *groupResourceType) Entitlements(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (o *groupResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 
 	assignmentOptions := []ent.EntitlementOption{
@@ -101,7 +100,7 @@ func (o *groupResourceType) Entitlements(ctx context.Context, resource *v2.Resou
 	return rv, "", nil, nil
 }
 
-func (o *groupResourceType) Grants(ctx context.Context, resource *v2.Resource, pt *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (o *groupResourceType) Grants(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
 	resp, err := o.client.ListGroupGrants(ctx, resource.Id.Resource)
 	if err != nil {
 		return nil, "", nil, err
