@@ -8,7 +8,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	ent "github.com/conductorone/baton-sdk/pkg/types/entitlement"
-	grant "github.com/conductorone/baton-sdk/pkg/types/grant"
+	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	res "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-twingate/pkg/connector/client"
 )
@@ -27,7 +27,7 @@ func (o *roleResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func roleResource(ctx context.Context, role *client.Role) (*v2.Resource, error) {
+func roleResource(role *client.Role) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"role_id":   role.Id,
 		"role_name": role.Name,
@@ -50,7 +50,7 @@ func roleResource(ctx context.Context, role *client.Role) (*v2.Resource, error) 
 	return resource, nil
 }
 
-func (o *roleResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (o *roleResourceType) List(ctx context.Context, _ *v2.ResourceId, _ *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
 	roles, err := o.client.ListRoles(ctx)
 	if err != nil {
 		return nil, "", nil, err
@@ -58,9 +58,7 @@ func (o *roleResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagin
 
 	rv := make([]*v2.Resource, 0, len(roles))
 	for _, r := range roles {
-		roleCopy := r
-
-		rr, err := roleResource(ctx, roleCopy)
+		rr, err := roleResource(r)
 		if err != nil {
 			return nil, "", nil, err
 		}
@@ -70,7 +68,7 @@ func (o *roleResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagin
 	return rv, "", nil, nil
 }
 
-func (o *roleResourceType) Entitlements(ctx context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (o *roleResourceType) Entitlements(_ context.Context, resource *v2.Resource, _ *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
 	var rv []*v2.Entitlement
 
 	assignmentOptions := []ent.EntitlementOption{

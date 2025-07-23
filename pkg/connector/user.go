@@ -7,7 +7,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
-	resource "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-twingate/pkg/connector/client"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
@@ -23,7 +23,7 @@ func (o *userResourceType) ResourceType(_ context.Context) *v2.ResourceType {
 	return o.resourceType
 }
 
-func userResource(ctx context.Context, user *client.User) (*v2.Resource, error) {
+func userResource(user *client.User) (*v2.Resource, error) {
 	profile := map[string]interface{}{
 		"first_name": user.FirstName,
 		"last_name":  user.LastName,
@@ -38,8 +38,10 @@ func userResource(ctx context.Context, user *client.User) (*v2.Resource, error) 
 		resource.WithStatus(v2.UserTrait_Status_STATUS_ENABLED),
 	}
 
+	displayName := getDisplayName(user.Email, user.FirstName, user.LastName)
+
 	resource, err := resource.NewUserResource(
-		fmt.Sprintf("%s %s", user.FirstName, user.LastName),
+		displayName,
 		resourceTypeUser,
 		user.ID,
 		userTraitOptions,
@@ -49,6 +51,18 @@ func userResource(ctx context.Context, user *client.User) (*v2.Resource, error) 
 	}
 
 	return resource, nil
+}
+
+func getDisplayName(email, firstName, lastName string) string {
+	if firstName == "" && lastName == "" {
+		return email
+	}
+
+	if firstName == "" {
+		return lastName
+	}
+
+	return fmt.Sprintf("%s %s", firstName, lastName)
 }
 
 func (o *userResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
@@ -77,8 +91,7 @@ func (o *userResourceType) List(ctx context.Context, _ *v2.ResourceId, pt *pagin
 			continue
 		}
 
-		userCopy := user
-		ur, err := userResource(ctx, userCopy)
+		ur, err := userResource(user)
 		if err != nil {
 			return nil, "", nil, err
 		}
