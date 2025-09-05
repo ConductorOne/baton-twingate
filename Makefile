@@ -19,11 +19,11 @@ endif
 .PHONY: build
 build: $(GENERATED_CONF)
 	go build ${BUILD_TAGS} -o ${OUTPUT_PATH} ./cmd/baton-twingate
-
+    
 $(GENERATED_CONF): pkg/config/config.go go.mod
 	@echo "Generating $(GENERATED_CONF)..."
 	go generate ./pkg/config
-
+    
 generate: $(GENERATED_CONF)
 
 .PHONY: update-deps
@@ -33,10 +33,10 @@ update-deps:
 	go mod vendor
 
 .PHONY: add-deps
-add-dep:
+add-deps:
 	go mod tidy -v
 	go mod vendor
-
+	
 .PHONY: lint
 lint:
 	golangci-lint run
