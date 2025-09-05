@@ -123,6 +123,32 @@ func (o *groupResourceType) Grants(ctx context.Context, resource *v2.Resource, _
 	return rv, "", annotations, nil
 }
 
+func (o *groupResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	resp, err := o.client.GrantGroupMembership(ctx, entitlement.Resource.Id.Resource, principal.Id.Resource)
+	if err != nil {
+		return nil, err
+	}
+
+	var annos annotations.Annotations
+	if resp.RateLimitDescription != nil {
+		annos.WithRateLimiting(resp.RateLimitDescription)
+	}
+	return annos, nil
+}
+
+func (o *groupResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	resp, err := o.client.RevokeGroupMembership(ctx, grant.Entitlement.Resource.Id.Resource, grant.Principal.Id.Resource)
+	if err != nil {
+		return nil, err
+	}
+
+	var annos annotations.Annotations
+	if resp.RateLimitDescription != nil {
+		annos.WithRateLimiting(resp.RateLimitDescription)
+	}
+	return annos, nil
+}
+
 func groupBuilder(client *client.ConnectorClient, domain string) *groupResourceType {
 	return &groupResourceType{
 		resourceType: resourceTypeGroup,
