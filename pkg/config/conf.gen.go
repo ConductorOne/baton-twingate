@@ -8,7 +8,7 @@ type Twingate struct {
 	ApiKey string `mapstructure:"api-key"`
 }
 
-func (c* Twingate) findFieldByTag(tagValue string) (any, bool) {
+func (c *Twingate) findFieldByTag(tagValue string) (any, bool) {
 	v := reflect.ValueOf(c).Elem() // Dereference pointer to struct
 	t := v.Type()
 
@@ -40,11 +40,13 @@ func (c *Twingate) GetString(fieldName string) string {
 	if !ok {
 		return ""
 	}
-	t, ok := v.(string)
-	if !ok {
-		panic("wrong type")
+	if t, ok := v.(string); ok {
+		return t
 	}
-	return t
+	if t, ok := v.([]byte); ok {
+		return string(t)
+	}
+	panic("wrong type")
 }
 
 func (c *Twingate) GetInt(fieldName string) int {
