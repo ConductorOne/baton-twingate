@@ -7,6 +7,7 @@ import (
 
 	"github.com/conductorone/baton-sdk/pkg/config"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/connectorrunner"
 	"github.com/conductorone/baton-sdk/pkg/field"
 	"github.com/conductorone/baton-sdk/pkg/types"
 	cfg "github.com/conductorone/baton-twingate/pkg/config"
@@ -25,6 +26,7 @@ func main() {
 		"baton-twingate",
 		getConnector,
 		cfg.Configuration,
+		connectorrunner.WithDefaultCapabilitiesConnectorBuilder(&connector.Twingate{}),
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
