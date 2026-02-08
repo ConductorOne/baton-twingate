@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -17,10 +15,8 @@ import (
 )
 
 const (
-	APIDomain = "%s.twingate.com"
-	APIPath   = "api"
-	Path      = "graphql"
-	rateLimit = 20 // TODO(mstanbCO) Change this back to 60
+	DefaultBaseURL = "https://%s.twingate.com/api/graphql/"
+	rateLimit      = 20 // TODO(mstanbCO) Change this back to 60
 )
 
 type Role struct {
@@ -175,21 +171,27 @@ type Client interface {
 
 type ConnectorClient struct {
 	Domain                string
+	baseURL               string
 	Client                *http.Client
 	ApiKey                string
 	rateLimitBucket       int64
 	rateLimitRequestCount int64
 }
 
-func New(ctx context.Context, apiKey string, domain string) (*ConnectorClient, error) {
+func New(ctx context.Context, apiKey string, domain string, baseURL string) (*ConnectorClient, error) {
 	client, err := newClient(ctx)
 	if err != nil {
 		return nil, err
 	}
+	effectiveBaseURL := baseURL
+	if effectiveBaseURL == "" {
+		effectiveBaseURL = fmt.Sprintf(DefaultBaseURL, domain)
+	}
 	return &ConnectorClient{
-		Domain: domain,
-		Client: client,
-		ApiKey: apiKey,
+		Domain:  domain,
+		baseURL: effectiveBaseURL,
+		Client:  client,
+		ApiKey:  apiKey,
 	}, nil
 }
 
@@ -202,7 +204,6 @@ func newClient(ctx context.Context) (*http.Client, error) {
 }
 
 func (c *ConnectorClient) query(ctx context.Context, rawQuery string, res interface{}, variables map[string]string) (*v2.RateLimitDescription, error) {
-	reqUrl := url.URL{Scheme: "https", Host: fmt.Sprintf(APIDomain, c.Domain), Path: strings.Join([]string{APIPath, Path, ""}, "/")}
 	q := &Query{
 		Query:     rawQuery,
 		Variables: variables,
@@ -211,7 +212,7 @@ func (c *ConnectorClient) query(ctx context.Context, rawQuery string, res interf
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqUrl.String(), bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(b))
 	if err != nil {
 		return nil, err
 	}

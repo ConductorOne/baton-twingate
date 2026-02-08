@@ -6,6 +6,7 @@ import "reflect"
 type Twingate struct {
 	Domain string `mapstructure:"domain"`
 	ApiKey string `mapstructure:"api-key"`
+	BaseUrl string `mapstructure:"base-url"`
 }
 
 func (c *Twingate) findFieldByTag(tagValue string) (any, bool) {
