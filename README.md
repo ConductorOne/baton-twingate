@@ -1,6 +1,6 @@
 ![Baton Logo](./docs/images/baton-logo.png)
 
-# `baton-twingate` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-twingate.svg)](https://pkg.go.dev/github.com/conductorone/baton-twingate) ![main ci](https://github.com/conductorone/baton-twingate/actions/workflows/main.yaml/badge.svg)
+# `baton-twingate` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-twingate.svg)](https://pkg.go.dev/github.com/conductorone/baton-twingate) ![verify](https://github.com/conductorone/baton-twingate/actions/workflows/verify.yaml/badge.svg)
 
 `baton-twingate` is a connector for Twingate built using the [Baton SDK](https://github.com/conductorone/baton-sdk). It communicates with the Twingate API to sync data about groups, roles, and users.
 
