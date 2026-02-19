@@ -22,6 +22,7 @@ var (
 		"base-url",
 		field.WithDescription("Override the Twingate API URL (for testing). ($BATON_BASE_URL)"),
 		field.WithHidden(true),
+		field.WithExportTarget(field.ExportTargetCLIOnly),
 	)
 
 	ConfigurationFields = []field.SchemaField{
