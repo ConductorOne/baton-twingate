@@ -53,6 +53,15 @@ type GrantAndRevokeGroupResponse struct {
 	} `json:"data"`
 }
 
+type UserRoleUpdateResponse struct {
+	Data struct {
+		UserRoleUpdate struct {
+			Ok    bool    `json:"ok"`
+			Error *string `json:"error"`
+		} `json:"userRoleUpdate"`
+	} `json:"data"`
+}
+
 type GroupsQueryResponse struct {
 	Data struct {
 		Groups struct {
@@ -356,6 +365,26 @@ func (c *ConnectorClient) RevokeGroupMembership(ctx context.Context, groupID str
 	}
 
 	rv := &RevokeEntitlementResponse{
+		RateLimitDescription: rateLimitDescription,
+	}
+	return rv, nil
+}
+
+func (c *ConnectorClient) UpdateUserRole(ctx context.Context, userID string, role string) (*GrantEntitlementResponse, error) {
+	resp := &UserRoleUpdateResponse{}
+	rateLimitDescription, err := c.query(ctx, userRoleUpdateQueryFormat(userID, role), resp, nil)
+	if err != nil {
+		return nil, fmt.Errorf("twingate-client: error updating user role for %s: %w", c.Domain, err)
+	}
+
+	if !resp.Data.UserRoleUpdate.Ok {
+		if resp.Data.UserRoleUpdate.Error != nil {
+			return nil, fmt.Errorf("twingate: api error: '%s'", *resp.Data.UserRoleUpdate.Error)
+		}
+		return nil, fmt.Errorf("twingate: api error: unable to update role to %s for user %s", role, userID)
+	}
+
+	rv := &GrantEntitlementResponse{
 		RateLimitDescription: rateLimitDescription,
 	}
 	return rv, nil
