@@ -176,7 +176,7 @@ type Client interface {
 type ConnectorClient struct {
 	Domain                string
 	Client                *http.Client
-	ApiKey                string
+	apiKey                string
 	rateLimitBucket       int64
 	rateLimitRequestCount int64
 }
@@ -189,7 +189,7 @@ func New(ctx context.Context, apiKey string, domain string) (*ConnectorClient, e
 	return &ConnectorClient{
 		Domain: domain,
 		Client: client,
-		ApiKey: apiKey,
+		apiKey: apiKey,
 	}, nil
 }
 
@@ -215,9 +215,9 @@ func (c *ConnectorClient) query(ctx context.Context, rawQuery string, res interf
 	if err != nil {
 		return nil, err
 	}
-	req.Header["X-API-KEY"] = []string{c.ApiKey}
+	req.Header["X-API-KEY"] = []string{c.apiKey}
 	req.Header["Content-Type"] = []string{"application/json"}
-	resp, err := c.Client.Do(req)
+	resp, err := c.Client.Do(req) //nolint:gosec // G704: URL is constructed from connector config, not user input
 	if err != nil {
 		return nil, err
 	}

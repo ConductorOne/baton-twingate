@@ -33,7 +33,7 @@ var (
 
 type Config struct {
 	Domain string
-	ApiKey string
+	APIKey string //nolint:gosec // G117: not a hardcoded credential, populated from user config
 }
 type Twingate struct {
 	client *client.ConnectorClient
@@ -42,13 +42,13 @@ type Twingate struct {
 }
 
 func New(ctx context.Context, config Config) (*Twingate, error) {
-	client, err := client.New(ctx, config.ApiKey, config.Domain)
+	client, err := client.New(ctx, config.APIKey, config.Domain)
 	if err != nil {
 		return nil, err
 	}
 	rv := &Twingate{
 		domain: config.Domain,
-		apiKey: config.ApiKey,
+		apiKey: config.APIKey,
 		client: client,
 	}
 	return rv, nil
