@@ -170,9 +170,10 @@ type Client interface {
 }
 
 type ConnectorClient struct {
-	Domain                string
-	baseURL               string
-	Client                *http.Client
+	Domain  string
+	baseURL string
+	Client  *http.Client
+	//nolint:gosec,nolintlint // G117: legitimate field name, not a credential
 	ApiKey                string
 	rateLimitBucket       int64
 	rateLimitRequestCount int64
@@ -218,7 +219,7 @@ func (c *ConnectorClient) query(ctx context.Context, rawQuery string, res interf
 	}
 	req.Header["X-API-KEY"] = []string{c.ApiKey}
 	req.Header["Content-Type"] = []string{"application/json"}
-	resp, err := c.Client.Do(req)
+	resp, err := c.Client.Do(req) //nolint:gosec,nolintlint // G704: URL constructed from trusted config
 	if err != nil {
 		return nil, err
 	}

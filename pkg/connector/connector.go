@@ -32,7 +32,8 @@ var (
 )
 
 type Config struct {
-	Domain  string
+	Domain string
+	//nolint:gosec,nolintlint // G117: legitimate field name, not a credential
 	ApiKey  string
 	BaseURL string
 }
