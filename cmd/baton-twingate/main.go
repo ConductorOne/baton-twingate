@@ -61,7 +61,7 @@ func getConnector(ctx context.Context, tgc *cfg.Twingate) (types.ConnectorServer
 
 	connectorConfig := connector.Config{
 		Domain: domain,
-		ApiKey: apiKey,
+		APIKey: apiKey,
 	}
 
 	cb, err := connector.New(ctx, connectorConfig)
