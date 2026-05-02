@@ -60,8 +60,9 @@ func getConnector(ctx context.Context, tgc *cfg.Twingate) (types.ConnectorServer
 	}
 
 	connectorConfig := connector.Config{
-		Domain: domain,
-		ApiKey: apiKey,
+		Domain:  domain,
+		ApiKey:  apiKey,
+		BaseURL: tgc.BaseUrl,
 	}
 
 	cb, err := connector.New(ctx, connectorConfig)
