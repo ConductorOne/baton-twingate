@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -122,6 +123,37 @@ func (o *roleResourceType) Grants(ctx context.Context, resource *v2.Resource, pt
 		annotations.WithRateLimiting(resp.RateLimitDescription)
 	}
 	return rv, nextPage, annotations, nil
+}
+
+func (o *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	roleID := entitlement.Resource.Id.Resource
+	userID := principal.Id.Resource
+
+	resp, err := o.client.UpdateUserRole(ctx, userID, strings.ToUpper(roleID))
+	if err != nil {
+		return nil, err
+	}
+
+	var annos annotations.Annotations
+	if resp.RateLimitDescription != nil {
+		annos.WithRateLimiting(resp.RateLimitDescription)
+	}
+	return annos, nil
+}
+
+func (o *roleResourceType) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	userID := grant.Principal.Id.Resource
+
+	resp, err := o.client.UpdateUserRole(ctx, userID, "MEMBER")
+	if err != nil {
+		return nil, err
+	}
+
+	var annos annotations.Annotations
+	if resp.RateLimitDescription != nil {
+		annos.WithRateLimiting(resp.RateLimitDescription)
+	}
+	return annos, nil
 }
 
 func roleBuilder(client *client.ConnectorClient, domain string) *roleResourceType {

@@ -70,6 +70,13 @@ const (
 		  error
 		}
 	}`
+
+	userRoleUpdateQuery = `mutation{
+		userRoleUpdate(id: "%s", role: %s) {
+		  ok
+		  error
+		}
+	}`
 )
 
 func allUsersQuery(pg *string, pageSize uint32) string {
@@ -94,4 +101,8 @@ func addGroupMemberQueryFormat(groupID string, userID string) string {
 
 func removeGroupMemberQueryFormat(groupID string, userID string) string {
 	return fmt.Sprintf(removeGroupMemberQuery, groupID, userID)
+}
+
+func userRoleUpdateQueryFormat(userID string, role string) string {
+	return fmt.Sprintf(userRoleUpdateQuery, userID, role)
 }
