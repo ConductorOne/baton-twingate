@@ -417,7 +417,7 @@ func (c *ConnectorClient) UpdateUserRole(ctx context.Context, userID string, rol
 	resp := &UserRoleUpdateResponse{}
 	rld, err := c.query(ctx, userRoleUpdateQueryFormat(userID, role), resp, nil)
 	if err != nil {
-		return rld, fmt.Errorf("twingate-client: error updating user role for %s: %w", c.Domain, err)
+		return rld, fmt.Errorf("twingate-client: error updating role to %s for user %s on %s: %w", role, userID, c.Domain, err)
 	}
 	if len(resp.Errors) > 0 {
 		return rld, fmt.Errorf("twingate: graphql error: %s", resp.Errors[0].Message)
