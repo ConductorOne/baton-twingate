@@ -20,10 +20,10 @@ jobs:
           go-version-file: go.mod
       - name: Build baton-twingate
         run: go build ./cmd/baton-twingate
-      # Role grant/revoke. The connector is set-style: granting devops demotes the test
-      # principal from MEMBER, then revoking demotes it back to MEMBER, leaving a stable
-      # state for the next run. The principal is a dedicated CI user (baton-ci@example.com)
-      # that is safe to mutate.
+      # Role grant/revoke against a dedicated CI user (baton-ci@example.com) that is safe
+      # to mutate. The connector is set-style: revoke demotes to MEMBER, grant sets DEVOPS.
+      # sync-test runs revoke-then-grant, so each run exercises both paths and leaves the
+      # principal at DEVOPS — a stable, repeatable end state for the next run.
       # Role test runs before any group test — group membership can produce inherited
       # grants via expansion that would otherwise skew the role assertion.
       - name: Test role grant/revoke
