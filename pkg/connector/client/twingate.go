@@ -451,6 +451,12 @@ func (c *ConnectorClient) RevokeGroupMembership(ctx context.Context, groupID str
 }
 
 func (c *ConnectorClient) ListRoleGrants(ctx context.Context, roleID string, pagination string, pageSize uint32) (*RoleGrantsResponse, error) {
+	// Fail loud on an unknown role ID — guards against drift where a role is added to
+	// defaultRoles but not roleEnumByID, which would otherwise silently drop its grants.
+	targetEnum, ok := roleEnumByID[roleID]
+	if !ok {
+		return nil, fmt.Errorf("twingate-client: unknown role ID %q", roleID)
+	}
 	var pagePointer *string = nil
 	if pagination != "" {
 		pagePointer = &pagination
@@ -462,16 +468,13 @@ func (c *ConnectorClient) ListRoleGrants(ctx context.Context, roleID string, pag
 	}
 	// Bucket on user.role (the UserRole enum), NOT isAdmin — isAdmin is true for ADMIN,
 	// DEVOPS, SUPPORT, AND ACCESS_REVIEWER, so it cannot distinguish them.
-	targetEnum, ok := roleEnumByID[roleID]
 	grants := make([]RoleGrant, 0, len(resp.Data.Users.Edges))
-	if ok {
-		for _, user := range resp.Data.Users.Edges {
-			if strings.EqualFold(user.User.Role, targetEnum) {
-				grants = append(grants, RoleGrant{
-					PrincipalID: user.User.ID,
-					RoleID:      roleID,
-				})
-			}
+	for _, user := range resp.Data.Users.Edges {
+		if strings.EqualFold(user.User.Role, targetEnum) {
+			grants = append(grants, RoleGrant{
+				PrincipalID: user.User.ID,
+				RoleID:      roleID,
+			})
 		}
 	}
 	pg := ""
