@@ -12,12 +12,12 @@ jobs:
       BATON_DOMAIN: ${{ vars.BATON_DOMAIN }}
       BATON_API_KEY: ${{ secrets.BATON_API_KEY }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
       - name: Install Go
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Checkout code
-        uses: actions/checkout@v6
       - name: Build baton-twingate
         run: go build ./cmd/baton-twingate
       # Role grant/revoke. The connector is set-style: granting devops demotes the test
