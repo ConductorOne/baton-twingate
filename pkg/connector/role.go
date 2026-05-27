@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -11,6 +12,8 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	res "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-twingate/pkg/connector/client"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -122,6 +125,93 @@ func (o *roleResourceType) Grants(ctx context.Context, resource *v2.Resource, pt
 		annotations.WithRateLimiting(resp.RateLimitDescription)
 	}
 	return rv, nextPage, annotations, nil
+}
+
+// Grant sets a user's Twingate role via userRoleUpdate. Twingate roles are set-style — each
+// user holds exactly one role, so granting any role replaces the current one. A pre-flight
+// read is required because the API does not signal "already has this role".
+func (o *roleResourceType) Grant(ctx context.Context, principal *v2.Resource, entitlement *v2.Entitlement) (annotations.Annotations, error) {
+	outputAnnotations := annotations.Annotations{}
+
+	if principal.Id.ResourceType != resourceTypeUser.Id {
+		return nil, status.Errorf(codes.InvalidArgument, "twingate: principal must be a user, got %s", principal.Id.ResourceType)
+	}
+
+	roleID := entitlement.Resource.Id.Resource
+	userID := principal.Id.Resource
+
+	targetEnum, ok := client.RoleEnumByID(roleID)
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "twingate: unknown role: %s", roleID)
+	}
+
+	user, rld, err := o.client.GetUser(ctx, userID)
+	if rld != nil {
+		outputAnnotations.WithRateLimiting(rld)
+	}
+	if err != nil {
+		return outputAnnotations, err
+	}
+	if user == nil {
+		return outputAnnotations, status.Errorf(codes.NotFound, "twingate: user %s not found", userID)
+	}
+	if strings.EqualFold(user.Role, targetEnum) {
+		outputAnnotations.Append(&v2.GrantAlreadyExists{})
+		return outputAnnotations, nil
+	}
+
+	rld2, err := o.client.UpdateUserRole(ctx, userID, targetEnum)
+	if rld2 != nil {
+		outputAnnotations.WithRateLimiting(rld2)
+	}
+	if err != nil {
+		return outputAnnotations, err
+	}
+	return outputAnnotations, nil
+}
+
+// Revoke demotes a user to MEMBER (Twingate's only "no privileged role" state). Revoking the
+// Member role itself is invalid — Twingate users always have a role.
+func (o *roleResourceType) Revoke(ctx context.Context, gr *v2.Grant) (annotations.Annotations, error) {
+	outputAnnotations := annotations.Annotations{}
+
+	roleID := gr.Entitlement.Resource.Id.Resource
+	userID := gr.Principal.Id.Resource
+
+	if roleID == "member" {
+		return outputAnnotations, status.Error(codes.InvalidArgument,
+			"twingate: cannot revoke the Member role — Twingate users always have a role; grant a different role to change it")
+	}
+
+	grantedEnum, ok := client.RoleEnumByID(roleID)
+	if !ok {
+		return outputAnnotations, status.Errorf(codes.InvalidArgument, "twingate: unknown role: %s", roleID)
+	}
+
+	user, rld, err := o.client.GetUser(ctx, userID)
+	if rld != nil {
+		outputAnnotations.WithRateLimiting(rld)
+	}
+	if err != nil {
+		return outputAnnotations, err
+	}
+	if user == nil {
+		return outputAnnotations, status.Errorf(codes.NotFound, "twingate: user %s not found", userID)
+	}
+	// If the user no longer holds the role we're revoking, the grant is already gone.
+	if !strings.EqualFold(user.Role, grantedEnum) {
+		outputAnnotations.Append(&v2.GrantAlreadyRevoked{})
+		return outputAnnotations, nil
+	}
+
+	rld2, err := o.client.UpdateUserRole(ctx, userID, "MEMBER")
+	if rld2 != nil {
+		outputAnnotations.WithRateLimiting(rld2)
+	}
+	if err != nil {
+		return outputAnnotations, err
+	}
+	return outputAnnotations, nil
 }
 
 func roleBuilder(client *client.ConnectorClient, domain string) *roleResourceType {
