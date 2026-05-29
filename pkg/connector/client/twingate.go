@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -99,6 +100,32 @@ type User struct {
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	IsAdmin   bool   `json:"isAdmin"`
+	// Role is the UserRole enum value: ADMIN, DEVOPS, SUPPORT, ACCESS_REVIEWER, or MEMBER.
+	// Bucket role grants on this field, NOT isAdmin (isAdmin is true for all but MEMBER).
+	Role string `json:"role"`
+}
+
+// GraphQLError is a top-level GraphQL error entry (validation errors, e.g. a bad enum).
+// These land in the response's top-level `errors[]`, NOT in data.<op>.error.
+type GraphQLError struct {
+	Message string `json:"message"`
+}
+
+type UserRoleUpdateResponse struct {
+	Data struct {
+		UserRoleUpdate struct {
+			Ok    bool    `json:"ok"`
+			Error *string `json:"error"`
+		} `json:"userRoleUpdate"`
+	} `json:"data"`
+	Errors []GraphQLError `json:"errors"`
+}
+
+type GetUserResponse struct {
+	Data struct {
+		User *User `json:"user"`
+	} `json:"data"`
+	Errors []GraphQLError `json:"errors"`
 }
 
 type PageInfo struct {
@@ -112,7 +139,32 @@ type Group struct {
 	IsActive bool   `json:"isActive,omitempty"`
 }
 
-var defaultRoles = []*Role{{Name: "Admin", Id: "admin"}, {Name: "Member", Id: "member"}}
+// defaultRoles models all 5 Twingate UserRole enum values. The enum is ADMIN, DEVOPS,
+// SUPPORT, ACCESS_REVIEWER, MEMBER — modeling only Admin/Member mis-buckets the middle
+// three (which all report isAdmin=true) as Admin.
+var defaultRoles = []*Role{
+	{Id: "admin", Name: "Admin"},
+	{Id: "devops", Name: "DevOps"},
+	{Id: "support", Name: "Support"},
+	{Id: "access_reviewer", Name: "Access Reviewer"},
+	{Id: "member", Name: "Member"},
+}
+
+// roleEnumByID maps an internal role ID to the on-wire UserRole enum. An explicit table
+// decouples role IDs from enum names (no strings.ToUpper) and fails loudly on unknown roles.
+var roleEnumByID = map[string]string{
+	"admin":           "ADMIN",
+	"devops":          "DEVOPS",
+	"support":         "SUPPORT",
+	"access_reviewer": "ACCESS_REVIEWER",
+	"member":          "MEMBER",
+}
+
+// RoleEnumByID returns the UserRole enum for a role ID, and whether the role is known.
+func RoleEnumByID(roleID string) (string, bool) {
+	enum, ok := roleEnumByID[roleID]
+	return enum, ok
+}
 
 type GroupGrant struct {
 	GroupID     string
@@ -344,6 +396,41 @@ func (c *ConnectorClient) GrantGroupMembership(ctx context.Context, groupID stri
 	return rv, nil
 }
 
+// GetUser fetches a single user's current state for an idempotency pre-flight read.
+// Returns a nil User (no error) when the user does not exist (data.user is null).
+func (c *ConnectorClient) GetUser(ctx context.Context, userID string) (*User, *v2.RateLimitDescription, error) {
+	resp := &GetUserResponse{}
+	rld, err := c.query(ctx, getUserQueryFormat(userID), resp, nil)
+	if err != nil {
+		return nil, rld, fmt.Errorf("twingate-client: error getting user %s for %s: %w", userID, c.Domain, err)
+	}
+	if len(resp.Errors) > 0 {
+		return nil, rld, fmt.Errorf("twingate: graphql error: %s", resp.Errors[0].Message)
+	}
+	return resp.Data.User, rld, nil
+}
+
+// UpdateUserRole sets a user's role via the userRoleUpdate mutation. role is the on-wire
+// UserRole enum (e.g. "ADMIN", "MEMBER"). It surfaces top-level GraphQL errors (e.g. a bad
+// enum), which land in errors[] and do NOT populate data.userRoleUpdate.
+func (c *ConnectorClient) UpdateUserRole(ctx context.Context, userID string, role string) (*v2.RateLimitDescription, error) {
+	resp := &UserRoleUpdateResponse{}
+	rld, err := c.query(ctx, userRoleUpdateQueryFormat(userID, role), resp, nil)
+	if err != nil {
+		return rld, fmt.Errorf("twingate-client: error updating role to %s for user %s on %s: %w", role, userID, c.Domain, err)
+	}
+	if len(resp.Errors) > 0 {
+		return rld, fmt.Errorf("twingate: graphql error: %s", resp.Errors[0].Message)
+	}
+	if !resp.Data.UserRoleUpdate.Ok {
+		if resp.Data.UserRoleUpdate.Error != nil {
+			return rld, fmt.Errorf("twingate: api error: '%s'", *resp.Data.UserRoleUpdate.Error)
+		}
+		return rld, fmt.Errorf("twingate: unable to update role to %s for user %s", role, userID)
+	}
+	return rld, nil
+}
+
 func (c *ConnectorClient) RevokeGroupMembership(ctx context.Context, groupID string, userID string) (*RevokeEntitlementResponse, error) {
 	resp := &GrantAndRevokeGroupResponse{}
 	rateLimitDescription, err := c.query(ctx, removeGroupMemberQueryFormat(groupID, userID), resp, nil)
@@ -364,6 +451,12 @@ func (c *ConnectorClient) RevokeGroupMembership(ctx context.Context, groupID str
 }
 
 func (c *ConnectorClient) ListRoleGrants(ctx context.Context, roleID string, pagination string, pageSize uint32) (*RoleGrantsResponse, error) {
+	// Fail loud on an unknown role ID — guards against drift where a role is added to
+	// defaultRoles but not roleEnumByID, which would otherwise silently drop its grants.
+	targetEnum, ok := roleEnumByID[roleID]
+	if !ok {
+		return nil, fmt.Errorf("twingate-client: unknown role ID %q", roleID)
+	}
 	var pagePointer *string = nil
 	if pagination != "" {
 		pagePointer = &pagination
@@ -373,14 +466,11 @@ func (c *ConnectorClient) ListRoleGrants(ctx context.Context, roleID string, pag
 	if err != nil {
 		return nil, fmt.Errorf("twingate-client: error getting role grants for %s: %w", c.Domain, err)
 	}
+	// Bucket on user.role (the UserRole enum), NOT isAdmin — isAdmin is true for ADMIN,
+	// DEVOPS, SUPPORT, AND ACCESS_REVIEWER, so it cannot distinguish them.
 	grants := make([]RoleGrant, 0, len(resp.Data.Users.Edges))
 	for _, user := range resp.Data.Users.Edges {
-		if roleID == "admin" && user.User.IsAdmin {
-			grants = append(grants, RoleGrant{
-				PrincipalID: user.User.ID,
-				RoleID:      roleID,
-			})
-		} else if roleID == "member" && !user.User.IsAdmin {
+		if strings.EqualFold(user.User.Role, targetEnum) {
 			grants = append(grants, RoleGrant{
 				PrincipalID: user.User.ID,
 				RoleID:      roleID,

@@ -14,6 +14,7 @@ const (
         createdAt
         updatedAt
         isAdmin
+        role
         state
       }
   }
@@ -70,6 +71,26 @@ const (
 		  error
 		}
 	}`
+
+	// getUserQuery fetches a single user's current role for idempotency pre-flight checks.
+	getUserQuery = `query{
+		user(id: "%s") {
+			id
+			email
+			isAdmin
+			role
+			state
+		}
+	}`
+
+	// userRoleUpdateQuery sets a user's role. `role` is a GraphQL UserRole enum and must
+	// NOT be quoted. Docs: https://www.twingate.com/docs/api#definition-UserRoleUpdateMutation
+	userRoleUpdateQuery = `mutation{
+		userRoleUpdate(id: "%s", role: %s) {
+		  ok
+		  error
+		}
+	}`
 )
 
 func allUsersQuery(pg *string, pageSize uint32) string {
@@ -86,6 +107,14 @@ func groupsQuery(pg *string, pageSize uint32) string {
 	} else {
 		return fmt.Sprintf(getGroupsQuery, *pg, pageSize)
 	}
+}
+
+func getUserQueryFormat(userID string) string {
+	return fmt.Sprintf(getUserQuery, userID)
+}
+
+func userRoleUpdateQueryFormat(userID string, role string) string {
+	return fmt.Sprintf(userRoleUpdateQuery, userID, role)
 }
 
 func addGroupMemberQueryFormat(groupID string, userID string) string {
