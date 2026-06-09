@@ -12,6 +12,7 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -284,7 +285,11 @@ func (c *ConnectorClient) query(ctx context.Context, rawQuery string, res interf
 		return nil, fmt.Errorf("twingate-client: GraphQL HTTP request failed %d %s", resp.StatusCode, string(rawResp))
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return c.getRateLimitDescription(ctx, true), nil
+		return c.getRateLimitDescription(ctx, true), uhttp.WrapErrorsWithRateLimitInfo(
+			codes.Unavailable,
+			resp,
+			fmt.Errorf("twingate-client: rate limited (HTTP 429)"),
+		)
 	}
 	if err := json.Unmarshal(rawResp, res); err != nil {
 		return nil, err
