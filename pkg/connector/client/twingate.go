@@ -285,7 +285,7 @@ func (c *ConnectorClient) query(ctx context.Context, rawQuery string, res interf
 		return nil, fmt.Errorf("twingate-client: GraphQL HTTP request failed %d %s", resp.StatusCode, string(rawResp))
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return c.getRateLimitDescription(ctx, true), uhttp.WrapErrorsWithRateLimitInfo(
+		return nil, uhttp.WrapErrorsWithRateLimitInfo(
 			codes.Unavailable,
 			resp,
 			fmt.Errorf("twingate-client: rate limited (HTTP 429)"),
