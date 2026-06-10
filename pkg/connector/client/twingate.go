@@ -12,6 +12,7 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -284,13 +285,17 @@ func (c *ConnectorClient) query(ctx context.Context, rawQuery string, res interf
 		return nil, fmt.Errorf("twingate-client: GraphQL HTTP request failed %d %s", resp.StatusCode, string(rawResp))
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return c.getRateLimitDescription(ctx, true), nil
+		return nil, uhttp.WrapErrorsWithRateLimitInfo(
+			codes.Unavailable,
+			resp,
+			fmt.Errorf("twingate-client: rate limited (HTTP 429)"),
+		)
 	}
 	if err := json.Unmarshal(rawResp, res); err != nil {
 		return nil, err
 	}
 
-	return c.getRateLimitDescription(ctx, false), nil
+	return c.getRateLimitDescription(ctx), nil
 }
 
 func (c *ConnectorClient) ListUsers(ctx context.Context, pagination string, pageSize uint32) (*UsersResponse, error) {
@@ -489,26 +494,20 @@ func (c *ConnectorClient) ListRoleGrants(ctx context.Context, roleID string, pag
 	return rv, nil
 }
 
-// TODO(mstanbCO): Fix the rate limiting logic when it becomes an issue
-func (c *ConnectorClient) getRateLimitDescription(ctx context.Context, isOverLimit bool) *v2.RateLimitDescription {
-	var status v2.RateLimitDescription_Status
-	var remaining int64
+func (c *ConnectorClient) getRateLimitDescription(ctx context.Context) *v2.RateLimitDescription {
 	now := time.Now().Unix()
-	// Round down to the nearest whole minute
 	currentBucket := now - (now % 60)
-	if isOverLimit {
-		status = v2.RateLimitDescription_STATUS_OVERLIMIT
-		remaining = 0
-	} else {
-		status = v2.RateLimitDescription_STATUS_OK
-		if currentBucket > c.rateLimitBucket {
-			c.rateLimitBucket = currentBucket
-			c.rateLimitRequestCount = 0
-		}
-		c.rateLimitRequestCount++
-		remaining = rateLimit - c.rateLimitRequestCount
+	if currentBucket > c.rateLimitBucket {
+		c.rateLimitBucket = currentBucket
+		c.rateLimitRequestCount = 0
 	}
-	resetAt := time.Unix(c.rateLimitBucket, 0).Add(time.Minute * 2) // TODO(mstanbCO): Change this back to one minute
-	rateLimitDescription := &v2.RateLimitDescription{Limit: rateLimit, ResetAt: timestamppb.New(resetAt), Remaining: remaining, Status: status}
-	return rateLimitDescription
+	c.rateLimitRequestCount++
+	remaining := rateLimit - c.rateLimitRequestCount
+	resetAt := time.Unix(c.rateLimitBucket, 0).Add(time.Minute)
+	return &v2.RateLimitDescription{
+		Limit:     rateLimit,
+		ResetAt:   timestamppb.New(resetAt),
+		Remaining: remaining,
+		Status:    v2.RateLimitDescription_STATUS_OK,
+	}
 }
