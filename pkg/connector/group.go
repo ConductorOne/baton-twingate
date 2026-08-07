@@ -33,15 +33,14 @@ func groupResource(group client.Group) (*v2.Resource, error) {
 		"group_name": group.Name,
 	}
 
-	groupTraitOptions := []res.GroupTraitOption{
-		res.WithGroupProfile(profile),
-	}
+	groupTraitOptions := []res.GroupTraitOption{}
 
 	resource, err := res.NewGroupResource(
 		group.Name,
 		resourceTypeGroup,
 		group.ID,
 		groupTraitOptions,
+		res.WithResourceProfile(profile),
 	)
 	if err != nil {
 		return nil, err
